@@ -1,11 +1,11 @@
 % NOTE -- ONLY EDIT THE .Rnw FILE!!!  The .tex file is
 % likely to be overwritten.
 %
-% \VignetteIndexEntry{affycoretools, refactored}
-% \VignetteDepends{affycoretools, Biobase, ReportingTools, limma,
-% knitr, AnnotationDbi, hgu95av2.db}
+% \VignetteIndexEntry{MacDonaldBioC2015}
+% \VignetteDepends{affycoretools, Biobase, limma,
+% knitr}
 % \VignetteKeywords{Expression Analysis, Postprocessing}
-% \VignettePackage{affycoretools}
+% \VignettePackage{MacDonaldBioC2015}
 %\VignetteEngine{knitr::knitr}
 
 <<include=FALSE>>=
