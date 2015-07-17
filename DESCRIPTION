@@ -1,0 +1,10 @@
+Package: MacDonaldBioC2015
+Type: Package
+Title: package for Bioc2015 talk
+Version: 1.0
+Date: 2015-07-17
+Author: James W. MacDonald	
+Maintainer: James W. MacDonald <jmacdon@uw.edu>
+Description: See above. This package is intended for an afternoon practical.
+License: Artistic-2.0
+Depends: limma, Biobase, affycoretools

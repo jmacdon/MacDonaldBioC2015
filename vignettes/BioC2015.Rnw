@@ -1,0 +1,591 @@
+% NOTE -- ONLY EDIT THE .Rnw FILE!!!  The .tex file is
+% likely to be overwritten.
+%
+% \VignetteIndexEntry{affycoretools, refactored}
+% \VignetteDepends{affycoretools, Biobase, ReportingTools, limma,
+% knitr, AnnotationDbi, hgu95av2.db}
+% \VignetteKeywords{Expression Analysis, Postprocessing}
+% \VignettePackage{affycoretools}
+%\VignetteEngine{knitr::knitr}
+
+<<include=FALSE>>=
+knitr::opts_chunk$set(tidy=FALSE)
+library2 <- function(package) suppressPackageStartupMessages(require(package, character.only = TRUE))
+@
+
+\documentclass[11pt]{article}
+\usepackage{csquotes}
+\usepackage{amsmath}
+
+<<style, eval=TRUE, echo=FALSE, results="asis">>=
+BiocStyle::latex()
+options(bitmapType = "cairo")
+@ 
+
+
+
+\parindent 0.5in
+
+
+
+
+\begin{document}
+
+\title{\bf Bioconductor 2015 - FAQ Live!}
+
+\author{James W. MacDonald\footnote{jmacdon@u.washington.edu}}
+
+\maketitle
+\tableofcontents
+\newpage
+
+
+
+\section{Overview}
+
+This workshop is intended to be a live version of the Bioconductor
+support site, where we can go over typical questions, but perhaps in
+more depth. Given the short time available, we will cover two of the
+most frequently asked question types; design and contrast matrix
+construction and interpretation, and error tracking/debugging.
+
+\section{Asking questions on the support site}
+
+<<echo = FALSE, include = FALSE>>=
+
+eset <- matrix(rnorm(200), ncol = 2)
+Treat <- factor(c("Treated","Control"))
+design <- model.matrix(~Treat)
+
+
+@ 
+
+Before getting to the main part of the course, we should first discuss
+how best to ask questions on the support site. We like to think of the
+support site as a repository of knowledge, where people with a
+question can look first, in order to answer their questions quickly
+and accurately. This works best if the questions posed on the support
+site are of high quality to begin with, which is where our end users
+come in.
+
+If you are trying to do something using Bioconductor, and get stuck,
+the first place you should go is Google! A well crafted Google search
+will answer your question most of the time, especially since the
+support site is idexed by Google. But let's say you have tried Google,
+but haven't come up with a useful answer. You could search the support
+site directly, but I find that Google does a better job than the
+search function on the support site. So really, you need to ask a
+question. The best way to ask the question is to try to reverse your
+position, and ask yourself what you would need to know in order to
+answer the question!
+
+This is actually easier to do than you would think. The first thing
+you need to do is be exact, but concise, about what you are doing,
+what you expect, and what tools you are using.
+
+\textbf{Here is a really bad question}
+
+
+\begin{displayquote}
+  I am using lmFit for my analysis, and it doesn't work. Can
+  anybody help?
+\end{displayquote}
+
+\textbf{And here is a moderately improved question:}
+
+\begin{displayquote}
+  I am using the limma package to compare tumor versus control,
+  and I get an error I don't understand. I have one tumor and one
+  control sample, and when I run eBayes, it gives me an error. Here is
+  the code I ran:
+
+<<eval = FALSE>>=
+
+fit <- lmFit(eset, design)
+fit2 <- eBayes(fit)
+Error in ebayes(fit = fit, proportion = proportion, stdev.coef.lim = stdev.coef.lim,  : 
+  No residual degrees of freedom in linear model fits
+@
+
+
+Can anybody help me?
+\end{displayquote}
+
+The first question obscures the real problem, and will require a few
+back-and-forth exchanges between the original poster and whomever
+decides to help. The second question is a bit better, because an
+experienced helper will know basically what the original poster is
+doing, what that error means, and will be able to explain it.
+\clearpage
+Ideally, the original poster will give the following bits of
+information:
+
+\begin{itemize}
+\item This is what I am trying to do
+\item This is the package (packages) I am using
+\item These are the data I am using (maybe R output using head(), or str())
+\item This is what I expect
+\item These are the results I am getting
+\item Here is the output from sessionInfo()
+\end{itemize}
+
+An improved way to ask the above question would be this:
+
+\begin{displayquote}
+  I am trying to compare two samples (tumor and control) using
+  limma, and I am getting an error I don't understand. My design
+  matrix looks like this:
+
+ <<>>=
+
+ design
+ 
+@ 
+
+  My data look like this:
+
+<<>>=
+
+head(eset)
+
+@ 
+  
+  and the error I get is:
+
+<<eval = FALSE>>=
+
+fit <- lmFit(eset, design)
+fit2 <- eBayes(fit)
+Error in ebayes(fit = fit, proportion = proportion, stdev.coef.lim = stdev.coef.lim,  : 
+  No residual degrees of freedom in linear model fits
+
+@ 
+
+
+  my sessionInfo() is:
+
+  [snip]
+\end{displayquote}
+
+  
+If you think you have found a bug, then you would give slightly
+different information. Ideally you would be able to give a small
+example that reproduces the error you are getting, so the package
+maintainer can track the bug down.
+
+There is a trade off between saying too much and saying too
+little. Try to be as explicit as possible without adding in extraneous
+details, although if you are really stuck it may be hard to know what
+is important and what is not. In that case, err on the side of too
+much information.
+
+\section{Design matrices}
+\subsection{Two-sample comparison}
+
+To explain how to generate and interpret design matrices, we will go
+over a set of examples that get progressively more complicated. The
+first one is simplest of all. Consider an experiment where you have
+run 10 samples using RNA-Seq, five each of tumor and control.
+
+<<>>=
+
+d.f <- data.frame(Samples = paste("Sample", 1:10),
+                  Type = factor(rep(c("Tumor","Control"),
+                  each = 5)))
+d.f
+
+@
+
+We can define the design matrices using the \Rfunction{model.matrix}
+function, either with or without an intercept. Please note that we
+will get identical results regardless - it just changes the
+interpretation of the model coefficients. First we can make a design
+matrix without an intercept.
+
+<<>>=
+
+design1 <- model.matrix(~0 + Type, d.f)
+design1
+
+@
+
+And we can make a design matrix with an intercept.
+
+<<>>=
+
+design2 <- model.matrix(~ Type, d.f)
+design2
+
+@
+
+The only difference between these two design matrices is that the
+first one (without intercept) is computing the mean of each sample
+type, and the second design matrix has a baseline (intercept) term
+that is estimating the mean of the control samples, and a 'TypeTumor'
+term that is estimating the difference between Tumor and Control
+samples. How do we know this?
+
+<<>>=
+
+data.frame(Type = d.f$Type, design1)
+
+@
+
+The rows of a design matrix represent the samples, and the columns
+represent the model coefficients. The design matrix itself is an
+indicator matrix that shows if a given sample contributes information
+to a given coefficient (1 == yes, 0 == no). This leads to two
+conclusions. First, if a row is all zeros, except for one coefficient,
+then the coefficient is estimating the mean of the group that the
+sample belongs to. Second, we can figure out what that group is by
+looking to see which samples all have a single one in that column. So
+using that logic, we can say that TypeControl is estimating the mean
+of the Controls and TypeTumor is the mean of the Tumor samples.
+
+<<>>=
+
+data.frame(Type = d.f$Type, design2)
+
+@
+
+The other design is more confusing, because the intercept is all
+1s. But using the logic from above, we see that the rows with a single
+1 are just the Control samples, so we infer that the Intercept is
+estimating the mean of the Controls. But what about the TypeTumor
+column?
+
+We already know that TypeControl is the mean of the Controls, so this
+is easy to figure out using algebra:
+
+\begin{align*}
+  Tumor = Control + TypeTumor\\
+  Tumor - Control = TypeTumor
+\end{align*}
+
+To show that we get identical results, regardless of the design
+matrix, let's try this using limma
+
+<<>>=
+
+library(limma)
+set.seed(0xabeef)
+y <- matrix(rnorm(10000), 1000)
+## note that for design we need to use a contrasts matrix
+contrast <- makeContrasts(TypeTumor - TypeControl, levels = design1)
+fit <- lmFit(y, design1)
+fit2 <- contrasts.fit(fit, contrast)
+fit2 <- eBayes(fit2)
+
+fit3 <- lmFit(y, design2)
+fit3 <- eBayes(fit3)
+
+ all.equal(topTable(fit2,1), topTable(fit3,2))
+
+@ 
+\clearpage
+\subsection{Two-sample paired comparison}
+
+Let's assume that instead of having five tumor and five control
+subjects, we had five paired tumor/adjacent normal tissue samples and
+we wanted to know what genes are differentially expressed between the
+two tissue types. This is an inherently more powerful analysis,
+because we can control for the patient effect directly. In other
+words, one patient might have a higher expression of a given gene than
+the others in the study. This isn't of interest to us - instead we
+want to know how tumors differ from normal tissue - and the higher
+expression of a gene in a particular patient just introduces
+variability that makes it harder to detect differences. By using
+paired samples, we can estimate this patient-specific variability, and
+then ignore it when we make the comparisons we care about.
+
+<<>>=
+
+d.f2 <- data.frame(Patient = paste("Patient", rep(1:5, 2)),
+                   Type = d.f$Type)
+
+design3 <- model.matrix(~Type + Patient, d.f2)
+colnames(design3) <- gsub("Type|^Patient", "", colnames(design3))
+design3
+
+@ 
+
+Using what we learned in the last section, what does the Intercept
+estimate? How about Tumor? What about Patient 2 - Patient 5?
+
+For a conventional paired analysis, we compute Tumor - Control first,
+and then test to see if the mean of those differences are equal to
+zero or not. If you compute the differences by hand (using the 'y'
+matrix we generated above), what would the design matrix look like? Do
+you get the same results that you get using design3?
+
+\subsection{Batch effects}
+
+Let's say your lab ran an experiment where you had eight mice, four of
+which were treated with a new drug, and four with a vehicle
+control. Later on, your PI decided it wouldn't be enough samples, and
+had you run three more mice per group. You analyze using microarrays,
+and as part of the QC do a PCA plot that indicates there is a batch
+effect, where the first group looks substantially different from the
+second group.
+
+In this situation, we know there is some technical variability between
+the two batches, and like the patient-specific effect in the last
+section, it isn't interesting - it's just a nuisance that we have to
+deal with. We deal with them by estimating the difference between say
+batch A and batch B (A - B), and then using that difference to adjust
+the samples from batch A so they are comparable to batch B.
+
+<<>>=
+
+d.f3 <- data.frame(Treatment = rep(c("Treat","Cont","Treat","Cont"), c(4,4,3,3)),
+                   Batch = rep(c("A","B"), c(8,6)))
+design4 <- model.matrix(~Treatment + Batch, d.f3)
+design4
+
+@ 
+
+What do these three coefficients estimate?
+
+\subsection{Designs with an interaction}
+
+Your lab has a new cancer drug that you want to test, and one of the
+hallmarks of the cancer it is intended to treat is that the BRCA1 gene
+often gets mutated (it gets a stop codon inserted, so in effect it
+gets knocked out, and no longer creates a protein). The goal is to see
+how the drug affects tumors as compared to normal tissue in wild type
+animals, as well as animals that don't express BRCA1 any longer. In
+addition, you want to know if the drug affects BRCA1 knockouts
+differently than wild type. Figure~\ref{fig:interaction} shows just
+one example of an interaction.
+
+<<interaction, echo = FALSE, fig.cap = "Interaction example", out.width = "0.6\\linewidth", fig.pos = "!htbp" >>=
+
+library(ggplot2)
+set.seed(1)
+tmp <- data.frame(GeneX = c(rnorm(21, 4), rnorm(7, 7)),
+                  Type = factor(rep(c("WT Control","WT Treated","KO Control","KO Treated"), each = 7)))
+ggplot(tmp, aes(Type, GeneX)) + geom_point()
+
+@ 
+
+
+<<>>=
+
+## let's assume that we have seven replicates per group
+d.f4 <- data.frame(Treatment = rep(c("Control","Treated"), times = 2, each = 7),
+                   Genotype = rep(c("WT","KO"), each = 14))
+
+design5 <- model.matrix(~Treatment * Genotype, d.f4)
+design5                   
+
+@
+
+Note that we have used new notation here. Instead of Treatment +
+Genotype, we have used Treatment * Genotype. This is a short form for
+Treatment + Genotype + Treatment:Genotype, where we are telling R that
+we want to estimate the 'main effects' for Treatment and Genotype, as
+well as the interaction. What are all these coefficients estimating?
+Are these coefficients useful for answering the questions we have?
+
+Let's take a different tactic.
+
+<<>>=
+
+newgrp <- factor(apply(d.f4, 1, paste, collapse = "_"))
+design5.1 <- model.matrix(~ 0 + newgrp)
+colnames(design5.1) <- gsub("newgrp", "", colnames(design5.1))
+design5.1
+
+@ 
+
+What are these coefficients estimating? Would this be easier to
+interpret? How would you go about computing an interaction?
+
+\section{Debugging and dealing with errors}
+
+When writing your own code, and to a larger extent using other
+people's code, it is very useful to be able to debug when things go
+wrong. There is the obvious reason; if it's your own code, you want to
+be able to figure out where the problem is. But if it's somebody
+else's code, it is still useful to be able to debug, and it is
+actually more important in this regard because this is one of the best
+ways to improve your own R skills. Seeing how other people do things
+makes you a better coder because you learn things you might not have
+otherwise been exposed to, and you can see how those more adept than
+you solve problems.
+
+But there is an even better reason to be able to debug. If you are
+trying to get something done, and you are getting errors, you can
+either Google around for an answer, or you can ask on the Bioconductor
+support site and wait (hope for) an answer, or you can take matters
+into your own hands and try to figure out if it is a bug or if you are
+doing something wrong. This of course assumes that you have already
+looked at the help page...
+
+\subsection{The \Rfunction{debug} function}
+
+The simplest way to debug functions is to use the \Rfunction{debug}
+function, which will put the function into a 'browser' and allow you
+to step through line by line. This works best for 'bare' functions,
+for example \Rfunction{lmFit} in the limma package.
+
+<<eval = FALSE>>=
+
+library(limma)
+debug(lmFit)
+lmFit(y, design)
+
+@ 
+
+\subsection{Namespaces}
+
+Some packages use highly modularized code, where a top-level function
+calls a bunch of lower-level functions that do much of the actual
+work. My affycoretools package is an example. These are a bit more
+difficult to debug, because you have to look through lots of small
+functions, and some of them may be buried in a namespace.
+
+<<eval = FALSE>>=
+
+library("affycoretools")
+vennPage
+drawVenn
+debug(drawVenn)
+## access unexported functions with the ::: operator
+affycoretools:::drawVenn
+debug(affycoretools:::drawVenn)
+
+@
+
+Sometimes you hit an error in a package with lots of helper functions,
+and it's not clear where it comes from. In that case you can use
+\Rfunction{traceback}. An example is the error we used as an example
+above.
+
+<<eval = FALSE>>=
+
+eBayes(lmFit(eset, design))
+traceback()
+
+@ 
+
+Here we can see that the error occurred in the \Rfunction{ebayes}
+function, rather than in \Rfunction{eBayes}. We could then either use
+debug(ebayes) to step through that function, or just look at the
+function itself to see where we went wrong.
+
+\subsection{Debugging object-oriented functions}
+
+R has two different types of object oriented programming, where the
+idea is to be able to have a single function, say 'print', that will
+print out a useful summary, depending on what sort of object you want
+to print. In base R, the \Rfunction{print} function is a 'S3' object oriented
+function.
+
+<<>>=
+
+print
+head(methods(print))
+
+
+@ 
+
+There are almost 200 \Rfunction{print} functions, that do different
+things depending on what you are trying to print. So if you wanted to
+print results from fitting an ANOVA model, you would end up using
+print.aov.
+
+<<eval = FALSE>>=
+
+mod <-  aov(yield ~ block + N * P + K, npk)
+class(mod)
+print(mod)
+print.aov
+## no idea where this function lives. Use getAnywhere()
+getAnywhere(print.aov)$where
+debug(stats:::print.aov)
+## can now step through debugger by doing print(mod)
+
+@
+
+A more sophisticated version of object oriented programming is the S4
+system, which is the predominant system for Bioconductor. For S3
+methods you use \Rfunction{method} to find out what functions operate
+on a particular object, but in S4 you use \Rfunction{showMethods}
+instead.
+
+<<eval = FALSE>>=
+
+library("Biobase")
+show
+showMethods(show)
+## we can look at individual functions by saying what class we
+## want and setting includeDefs to TRUE
+showMethods(show, class = "AnnotatedDataFrame", includeDefs = TRUE)
+
+@
+
+This tells us that when we want to look at an
+\Rclass{AnnotatedDataFrame} object, R first examines the object,
+determines that it is of class \Rclass{AnnotatedDataFrame}, and then
+uses a function called \Rfunction{.showAnnotatedDataFrame} to process
+it. Let's see what that function looks like.
+
+<<eval = FALSE>>=
+
+.showAnnotatedDataFrame
+## Hmmm
+getAnywhere(.showAnnotatedDataFrame)
+## can we use debug()?
+
+df <- data.frame(x=1:6,
+                      y=rep(c("Low", "High"),3),
+                      z=I(LETTERS[1:6]),
+                      row.names=paste("Sample", 1:6, sep="_"))
+        
+ad <- AnnotatedDataFrame(data=df)
+show(ad)
+debug(Biobase:::.showAnnotatedDataFrame)
+## show(ad) to run through the debugger
+
+@
+
+How about the \Rfunction{show} method for an \Robject{eSet}?
+
+<<eval = FALSE>>=
+
+showMethods(show, class = "eSet", includeDefs = TRUE)
+## just a function there. Can we debug() directly?
+debug(show)
+data(sample.ExpressionSet)
+sample.ExpressionSet
+
+@ 
+
+That appeared to work, but we didn't actually step through the
+function. Instead we need to use the \Rfunction{trace} function, which
+is a bit more sophisticated.
+
+<<eval = FALSE>>=
+
+trace(show, tracer = browser, signature = c(x = "eSet"), where = getNamespace("Biobase"))
+sample.ExpressionSet
+
+
+@
+
+And now we are able to step through the function that processes
+\Robject{eSet} objects. 
+
+\section{Session information}
+The version of R and packages loaded when creating this vignette were:
+<<sessioninfo, results="asis">>=
+
+toLatex(sessionInfo())
+
+@ 
+
+
+\end{document}
+
+
