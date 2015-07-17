@@ -9,4 +9,3 @@ Description: See above. This package is intended for an afternoon practical.
 License: Artistic-2.0
 Depends: limma, Biobase, affycoretools
 VignetteBuilder: knitr
-
